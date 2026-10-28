@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基于 FastAPI 和 NLLB 模型的翻译系统 - 许博惟 毕业设计</title>
+    <style>
+        body { font-family: "Microsoft YaHei", Arial, sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1000px; margin: 40px auto; background: white; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); overflow: hidden; }
+        header { background: #4a00e0; color: white; padding: 30px; text-align: center; }
+        h1 { margin: 0; font-size: 2.5em; }
+        h2 { color: #4a00e0; border-bottom: 3px solid #4a00e0; padding-bottom: 10px; }
+        .section { padding: 30px; }
+        textarea { width: 100%; height: 150px; padding: 15px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; }
+        select, button, input[type=file] { padding: 12px; margin: 10px 5px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
+        button { background: #4a00e0; color: white; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #3a00c0; transform: scale(1.05); }
+        .result { margin-top: 20px; padding: 20px; background: #f0f2ff; border-radius: 10px; min-height: 100px; white-space: pre-wrap; }
+        .footer { text-align: center; padding: 20px; background: #f8f9fa; color: #666; font-size: 14px; }
+        .loading { display: none; color: #4a00e0; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>AI智能翻译系统</h1>
+        <p>唐山职业技术学院 · 人工智能技术应用专业 · 许博惟 2301240305</p>
+    </header>
+
+    <div class="section">
+        <h2>实时文本翻译</h2>
+        <select id="src_lang">
+            <option value="en">英语 English</option>
+            <option value="zh">中文 Chinese</option>
+            <option value="fr">法语 French</option>
+            <option value="de">德语 German</option>
+            <option value="ja">日语 Japanese</option>
+        </select>
+        <span> → </span>
+        <select id="tgt_lang">
+            <option value="zh">中文 Chinese</option>
+            <option value="en">英语 English</option>
+            <option value="fr">法语 French</option>
+            <option value="de">德语 German</option>
+            <option value="ja">日语 Japanese</option>
+        </select>
+
+        <textarea id="input_text" placeholder="在这里输入要翻译的文字..."></textarea>
+        <button onclick="translateText()">开始翻译</button>
+        <div class="loading" id="loading_text">翻译中，请稍后...</div>
+        <div class="result" id="text_result">翻译结果将显示在这里</div>
+        <button onclick="copyText()" style="display:none;" id="copy_btn">复制结果</button>
+        <button onclick="saveText()" style="display:none;" id="save_btn">保存为TXT</button>
+    </div>
+
+    <div class="section">
+        <h2>文档翻译（支持 .txt .docx .pdf）</h2>
+        <input type="file" id="file_input" accept=".txt,.docx,.pdf">
+        <button onclick="translateFile()">上传并翻译文档</button>
+        <div class="loading" id="loading_file">正在处理文档，请耐心等待...</div>
+        <div class="result" id="file_result">文档翻译完成后自动下载</div>
+    </div>
+
+    <div class="footer">
+        基于 Facebook NLLB-200 多语言翻译模型 + FastAPI + Transformer 实现 © 2025-2026 许博惟 毕业设计
+    </div>
+</div>
+
+<script>
+let currentResult = '';
+
+async function translateText() {
+    const text = document.getElementById('input_text').value.trim();
+    const src = document.getElementById('src_lang').value;
+    const tgt = document.getElementById('tgt_lang').value;
+
+    if (!text) return alert('请输入要翻译的文字！');
+
+    document.getElementById('loading_text').style.display = 'block';
+    document.getElementById('text_result').innerText = '';
+
+    try {
+        const formData = new FormData();
+        formData.append('text', text);
+        formData.append('source_lang', src);
+        formData.append('target_lang', tgt);
+
+        const res = await fetch('/translate/text', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        document.getElementById('text_result').innerText = data.translated_text;
+        currentResult = data.translated_text;
+        document.getElementById('copy_btn').style.display = 'inline-block';
+        document.getElementById('save_btn').style.display = 'inline-block';
+    } catch (e) {
+        document.getElementById('text_result').innerText = '翻译失败：' + e.message;
+    } finally {
+        document.getElementById('loading_text').style.display = 'none';
+    }
+}
+
+async function translateFile() {
+    const file = document.getElementById('file_input').files[0];
+    if (!file) return alert('请先选择文件！');
+
+    const form = new FormData();
+    form.append('file', file);
+
+    document.getElementById('loading_file').style.display = 'block';
+
+    // 这里默认英→中，你可以自行加两个下拉框控制
+    const res = await fetch('/translate/file?source_lang=en&target_lang=zh', {
+        method: 'POST', body: form
+    });
+
+    if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '翻译结果_' + file.name.split('.')[0] + '.txt';
+        a.click();
+        document.getElementById('file_result').innerText = '翻译完成，已自动下载！';
+    } else {
+        document.getElementById('file_result').innerText = '翻译失败';
+    }
+    document.getElementById('loading_file').style.display = 'none';
+}
+
+function copyText() {
+    navigator.clipboard.writeText(currentResult);
+    alert('已复制到剪贴板！');
+}
+
+function saveText() {
+    const blob = new Blob([currentResult], {type: 'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '翻译结果.txt';
+    a.click();
+}
+</script>
+</body>
+</html>

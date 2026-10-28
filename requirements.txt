@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+
+# 模型推理（实测版本：torch 2.1.0 / transformers 4.36.0）
+torch
+transformers
+
+# 文档解析
+python-docx
+PyPDF2
